@@ -59,26 +59,13 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 	end // always
 	
 	
-	// Purpose: Determines whether the I2C Bus is busy or not.
-	always@(*) begin
-		if(RST == 1'b1 || State == IDLE) begin
-			Busy <= 1'b0;
-		end // if
-		
-		else begin
-			Busy <= 1'b1;
-		end // else
-		
-	end // always
-	
-	
 	// Purpose: Finite State Machine for I2C Master
 	always@(posedge CLK, posedge RST) begin
 		if (RST) begin
 			State <= IDLE;
 			SCL <= 1'b1;	sda_out <= 1'b1;
 			bytes_remaining <= BYTES_TO_READ;
-			bit_idx <= 0;	qcnt <= 0;
+			bit_idx <= 0;	qcnt <= 0;	Busy <= 1'b0;
 		end
 			
 		else begin
@@ -88,9 +75,11 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 					SDA_OE <= 1'b1;
 					sda_out <= 1'b1;
 					SCL <= 1'b1;
+					Busy <= 1'b0;
 					if(Start) begin
 						State <= START;
 						qcnt <= 0;
+						Busy <= 1'b0;
 					end
 				end // IDLE
 				
