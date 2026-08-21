@@ -137,29 +137,39 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 							1: SCL <= 1'b0;
 							2: SCL <= 1'b1;
 							3: begin
-							SCL <= 1'b1;
-							if(sda_in == 1'b0) begin
-								if(rw_bit == 1'b1)
-									State <= READ_DATA;
-								else if (rw_bit == 1'b0)
-									State <= WR_DATA;
-							end
-							else State <= STOP;
+								SCL <= 1'b1;
+								if(sda_in == 1'b0) begin
+									if(rw_bit == 1'b1)
+										State <= READ_DATA;
+									else if (rw_bit == 1'b0)
+										State <= WR_DATA;
+								end
+								else State <= STOP;
 							end
 						endcase
 					end // if
 				end // READ_ACK
 				
 				SEND_ACK: begin // Master is a receiver (byte received by master, ack transmitted by master)
-					SDA_OE <= 1'b1;
-					if(bytes_remaining == 1'b0) begin
-						sda_out <= 1'b1;
-						State <= STOP;
-					end
-					else begin
-						sda_out <= 1'b0;
-						State <= READ_DATA;
-					end
+					if(qbit) begin
+						qcnt <= qcnt + 1;
+						case(qcnt)
+							0: begin SDA_OE <= 1'b1; SCL <= 1'b0; end
+							1: SCL <= 1'b0;
+							2: SCL <= 1'b1;
+							3: begin
+								SCL <= 1'b1;
+								if(bytes_remaining == 3'h0) begin
+									sda_out <= 1'b1; // Sends NACK to slave transmitter as all data bytes are sent
+									State <= STOP;
+								end
+								else begin
+									sda_out <= 1'b0;
+									State <= READ_DATA;
+								end
+							end
+						endcase
+					end // if
 				end // SEND_ACK
 				
 				READ_DATA: begin
@@ -168,7 +178,7 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 					if(data_i == 0)
 						State <= SEND_ACK;
 					data_i <= data_i - 1;
-				end
+				end // READ_DATA
 				
 				WR_DATA: begin
 					SDA_OE <= 1'b1;
@@ -178,7 +188,7 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 						bytes_remaining <= bytes_remaining - 1;
 					end
 					data_i <= data_i - 1;
-				end
+				end // WR_DATA
 				
 				STOP: begin
 					if(qbit) begin
