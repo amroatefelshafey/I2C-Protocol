@@ -35,7 +35,7 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 	reg  [2:0] data_i;
 	wire [7:0] addr_rw;
 	
-	assign SDA = SDA_OE ? sda_out : 1'bz
+	assign SDA = SDA_OE ? sda_out : 1'bz;
 	assign addr_rw = {Slave_Addr, R_W};
 	
 	// Clock Divider Unit
@@ -43,7 +43,7 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 	reg       qbit;   // quarter-bit tick
 
 	always @(posedge CLK) begin
-		if (rst) begin 
+		if (RST) begin 
 			div_cnt <= 0; 
 			qbit <= 0; 
 		end // if
@@ -78,7 +78,7 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 			State <= IDLE;
 			SCL <= 1'b1;	sda_out <= 1'b1;
 			bytes_remaining <= BYTES_TO_READ;
-			bit_idx <= 0;	q_cnt <= 0;
+			bit_idx <= 0;	qcnt <= 0;
 		end
 			
 		else begin
@@ -90,7 +90,7 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 					SCL <= 1'b1;
 					if(Start) begin
 						State <= START;
-						q_cnt <= 0;
+						qcnt <= 0;
 					end
 				end // IDLE
 				
@@ -102,10 +102,11 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 							1: begin SCL <= 1'b1; sda_out <= 1'b0; end
 							2: begin SCL <= 1'b0; sda_out <= 1'b0; end
 							3: begin
-							bit_idx <= 7;
-							data_i <= 7;
-							bytes_remaining <= BYTES_TO_READ;
-							State <= ADDR;
+								SCL <= 1'b0;
+								bit_idx <= 7;
+								data_i <= 7;
+								bytes_remaining <= BYTES_TO_READ;
+								State <= ADDR;
 							end
 						endcase
 					end // if
@@ -116,15 +117,16 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 						qcnt <= qcnt + 1;
 						case(qcnt)
 							0: begin sda_out <= addr_rw[bit_idx]; SCL <= 1'b0; end
-							1: SCL <= 1'b0;
+							1: SCL <= 1'b1;
 							2: SCL <= 1'b1;
 							3: begin
-							SCL <= 1'b1;
-							if(bit_idx == 1'b0) begin
-								rw_bit <= addr_rw[bit_idx];
-								State <= READ_ACK;
-							end // if
-								bit_idx <= bit_idx - 1;
+								SCL <= 1'b0;
+								if(bit_idx == 1'b0) begin
+									rw_bit <= addr_rw[bit_idx];
+									State <= READ_ACK;
+								end // if
+									bit_idx <= bit_idx - 1;
+							end
 						endcase
 					end // if
 				end // ADDR
@@ -134,10 +136,10 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 						qcnt <= qcnt + 1;
 						case(qcnt)
 							0: begin SDA_OE <= 1'b0; SCL <= 1'b0; end
-							1: SCL <= 1'b0;
+							1: SCL <= 1'b1;
 							2: SCL <= 1'b1;
 							3: begin
-								SCL <= 1'b1;
+								SCL <= 1'b0;
 								if(sda_in == 1'b0) begin
 									if(rw_bit == 1'b1)
 										State <= READ_DATA;
@@ -154,19 +156,16 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 					if(qbit) begin
 						qcnt <= qcnt + 1;
 						case(qcnt)
-							0: begin SDA_OE <= 1'b1; SCL <= 1'b0; end
-							1: SCL <= 1'b0;
+							0: begin SDA_OE <= 1'b1; SCL <= 1'b0;
+								if(bytes_remaining == 3'h0) sda_out <= 1'b1; // Sends NACK to slave transmitter as all data bytes are sent
+								else sda_out <= 1'b0;
+							end
+							1: SCL <= 1'b1;
 							2: SCL <= 1'b1;
 							3: begin
-								SCL <= 1'b1;
-								if(bytes_remaining == 3'h0) begin
-									sda_out <= 1'b1; // Sends NACK to slave transmitter as all data bytes are sent
-									State <= STOP;
-								end
-								else begin
-									sda_out <= 1'b0;
-									State <= READ_DATA;
-								end
+								SCL <= 1'b0;
+								if(bytes_remaining == 3'h0) State <= STOP;
+								else State <= READ_DATA;
 							end
 						endcase
 					end // if
@@ -177,12 +176,15 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 						qcnt <= qcnt + 1;
 						case(qcnt)
 							0: begin SDA_OE <= 1'b0; SCL <= 1'b0; end
-							1: SCL <= 1'b0;
+							1: SCL <= 1'b1;
 							2: SCL <= 1'b1;
 							3: begin
 								Read_Data[data_i] <= sda_in;
-								if(data_i == 0)
+								SCL <= 1'b0;
+								if(data_i == 0) begin
 									State <= SEND_ACK;
+									bytes_remaining <= bytes_remaining - 1;
+								end
 								data_i <= data_i - 1;
 							end
 						endcase
@@ -193,11 +195,11 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 					if(qbit) begin
 						qcnt <= qcnt + 1;
 						case(qcnt)
-							0: begin SDA_OE <= 1'b1; SCL <= 1'b0; end
-							1: begin sda_out <= Write_Data[data_i]; SCL <= 1'b0; end
+							0: begin SDA_OE <= 1'b1; sda_out <= Write_Data[data_i]; SCL <= 1'b0; end
+							1: SCL <= 1'b1;
 							2: SCL <= 1'b1;
 							3: begin
-								SCL <= 1'b1;
+								SCL <= 1'b0;
 								if(data_i == 0) begin
 									State <= READ_ACK;
 									bytes_remaining <= bytes_remaining - 1;
@@ -220,5 +222,8 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 					end // if
 				end // STOP
 			endcase
+			
+		end // else
+	end // always
 
 endmodule
