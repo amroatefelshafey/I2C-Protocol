@@ -27,7 +27,7 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 	
 	reg  sda_out;
 	reg  rw_bit;
-	reg  [1:0] q_cnt;
+	reg  [1:0] qcnt;
 	reg  [2:0] bytes_remaining;
 	reg  [2:0] State;
 	reg  [2:0] bit_idx;
@@ -72,7 +72,7 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 	
 	
 	// Purpose: Finite State Machine for I2C Master
-	always@(posedge qbit, posedge RST) begin
+	always@(posedge CLK, posedge RST) begin
 		if (RST) begin
 			State <= IDLE;
 			SCL <= 1'b1;	sda_out <= 1'b1;
@@ -94,20 +94,38 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 				end // IDLE
 				
 				START: begin
-					sda_out <= 1'b0;
-					bit_idx <= 7;
-					data_i <= 7;
-					bytes_remaining <= BYTES_TO_READ;
-					State <= ADDR;
+					if(qbit) begin
+						qcnt <= qcnt + 1;
+						case(qcnt)
+							0: begin SCL <= 1'b1; sda_out <= 1'b1; end
+							1: begin SCL <= 1'b1; sda_out <= 1'b0; end
+							2: begin SCL <= 1'b0; sda_out <= 1'b0; end
+							3: begin
+							bit_idx <= 7;
+							data_i <= 7;
+							bytes_remaining <= BYTES_TO_READ;
+							State <= ADDR;
+							end
+						endcase
+					end // if
 				end // Start
 				
 				ADDR: begin
-					sda_out <= addr_rw[bit_idx];
-					if(bit_idx == 1'b0) begin
-						rw_bit <= addr_rw[bit_idx];
-						State <= READ_ACK;
-					end
-						bit_idx <= bit_idx - 1;
+					if(qbit) begin
+						qcnt <= qcnt + 1;
+						case(qcnt)
+							0: begin sda_out <= addr_rw[bit_idx]; SCL <= 1'b0; end
+							1: SCL <= 1'b0;
+							2: SCL <= 1'b1;
+							3: begin
+							SCL <= 1'b1;
+							if(bit_idx == 1'b0) begin
+								rw_bit <= addr_rw[bit_idx];
+								State <= READ_ACK;
+							end // if
+								bit_idx <= bit_idx - 1;
+						endcase
+					end // if
 				end // ADDR
 				
 				READ_ACK: begin // Master is a transmitter (byte trasmitted by master, ack received by master)
