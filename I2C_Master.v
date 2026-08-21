@@ -9,6 +9,7 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 	input [7:0] Write_Data,
 	input Start, // When start is high on IDLE state, transition to START and then pull SDA low, wait, pull SCL low
 	
+	input sda_in,
 	inout SDA, // SDA is inout because the master may be either tx or rx and sometimes must let go of the bus
 	output reg SCL, // Since the master generates the clock only from his internal clk, SCL is output
 	output reg SDA_OE,
@@ -129,15 +130,24 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 				end // ADDR
 				
 				READ_ACK: begin // Master is a transmitter (byte trasmitted by master, ack received by master)
-					SDA_OE <= 1'b0;
-					if(SDA == 1'b0) begin
-						if(rw_bit == 1'b1)
-							State <= READ_DATA;
-						else if (rw_bit == 1'b0)
-							State <= WR_DATA;
-					end
-					else
-						State <= STOP;
+					if(qbit) begin
+						qcnt <= qcnt + 1;
+						case(qcnt)
+							0: begin SDA_OE <= 1'b0; SCL <= 1'b0; end
+							1: SCL <= 1'b0;
+							2: SCL <= 1'b1;
+							3: begin
+							SCL <= 1'b1;
+							if(sda_in == 1'b0) begin
+								if(rw_bit == 1'b1)
+									State <= READ_DATA;
+								else if (rw_bit == 1'b0)
+									State <= WR_DATA;
+							end
+							else State <= STOP;
+							end
+						endcase
+					end // if
 				end // READ_ACK
 				
 				SEND_ACK: begin // Master is a receiver (byte received by master, ack transmitted by master)
@@ -171,9 +181,16 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 				end
 				
 				STOP: begin
-					sda_out <= 1;
-					SCL <= 1;					
-				end
+					if(qbit) begin
+						qcnt <= qcnt + 1;
+						case(qcnt)
+							0: begin sda_out <= 1'b0; SCL <= 1'b0; end
+							1: SCL <= 1'b1;
+							2: sda_out <= 1'b1;
+							3: State <= IDLE;
+						endcase
+					end // if
+				end // STOP
 			endcase
-					
+
 endmodule
