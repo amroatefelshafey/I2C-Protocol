@@ -173,21 +173,39 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 				end // SEND_ACK
 				
 				READ_DATA: begin
-					SDA_OE <= 1'b0;
-					Read_Data[data_i] <= SDA;
-					if(data_i == 0)
-						State <= SEND_ACK;
-					data_i <= data_i - 1;
+					if(qbit) begin
+						qcnt <= qcnt + 1;
+						case(qcnt)
+							0: begin SDA_OE <= 1'b0; SCL <= 1'b0; end
+							1: SCL <= 1'b0;
+							2: SCL <= 1'b1;
+							3: begin
+								Read_Data[data_i] <= sda_in;
+								if(data_i == 0)
+									State <= SEND_ACK;
+								data_i <= data_i - 1;
+							end
+						endcase
+					end //if
 				end // READ_DATA
 				
 				WR_DATA: begin
-					SDA_OE <= 1'b1;
-					sda_out <= Write_Data[data_i];
-					if(data_i == 0) begin
-						State <= READ_ACK;
-						bytes_remaining <= bytes_remaining - 1;
-					end
-					data_i <= data_i - 1;
+					if(qbit) begin
+						qcnt <= qcnt + 1;
+						case(qcnt)
+							0: begin SDA_OE <= 1'b1; SCL <= 1'b0; end
+							1: begin sda_out <= Write_Data[data_i]; SCL <= 1'b0; end
+							2: SCL <= 1'b1;
+							3: begin
+								SCL <= 1'b1;
+								if(data_i == 0) begin
+									State <= READ_ACK;
+									bytes_remaining <= bytes_remaining - 1;
+								end
+								data_i <= data_i - 1;
+							end
+						endcase
+					end // if
 				end // WR_DATA
 				
 				STOP: begin
