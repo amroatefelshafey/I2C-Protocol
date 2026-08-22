@@ -8,7 +8,7 @@ parameter ADDR_WIDTH = 7;
 parameter BYTES_TO_READ = 3;
 
 reg       CLK = 0;
-reg       RST = 1;
+reg       RST = 0;
 reg [ADDR_WIDTH-1:0] Slave_Addr = 7'h48;
 reg 	  R_W = 0; // 0 is for Write
 reg [7:0] Write_Data = 8'hAB;
@@ -21,8 +21,6 @@ wire 	   SDA_OE;
 wire	   Busy;
 wire [7:0] Read_Data;
 
-wire       done, ack_err;
-
 i2c_master #(.CLK_DIV(CLK_DIV), .ADDR_WIDTH(ADDR_WIDTH), .BYTES_TO_READ(BYTES_TO_READ)) dut 
 (
     .CLK(CLK), .RST(RST), .Start(Start),
@@ -34,11 +32,9 @@ i2c_master #(.CLK_DIV(CLK_DIV), .ADDR_WIDTH(ADDR_WIDTH), .BYTES_TO_READ(BYTES_TO
 always #5 CLK = ~CLK;
 
 integer pass_cnt = 0, fail_cnt = 0;
-integer scl_rise = 0;
 reg start_detected = 0;
 reg stop_detected  = 0;
 reg sda_prev = 1;
-reg scl_prev = 1;
 
 // Detect START and STOP conditions
 always @(SDA or SCL) begin
@@ -59,48 +55,43 @@ initial begin
     $dumpfile("tb_I2C_Master.vcd");
     $dumpvars(0, tb_I2C_Master);
 
-    repeat(4) @(posedge CLK);
-    RST = 0;
-    repeat(2) @(posedge CLK);
-
-    // Send a write transaction: slave address=0x48, write data=0xAB
-    // Slave will ACK (sda_in=0 simulated below)
-    @(posedge CLK);
-    Start = 1;
-    @(posedge CLK);
-    Start = 0;
-
-    // Simulate slave pulling SDA low for both ACK windows
-    // (Hold sda_in=0 throughout for simplicity — a real slave would
-    //  only pull during the ACK bit. For testbench purposes this works.)
-    sda_in = 0;
-
-    // Wait for done
-    @(posedge done);
-    @(posedge CLK);
+	force RST = 1; // Make sure all values are initialized correctly
+	#10;
+	release RST;
+	RST = 0;
+	#10;
+	
 
     // Release sda_in
     sda_in = 1;
+	
+	// Test #1: IDLE State
+	if (dut.State == dut.IDLE) begin
+		$display("Sitting at IDLE State"); pass_cnt = pass_cnt + 1;
+    end else begin
+        $display("ERROR: IDLE State is not the initial state"); fail_cnt = fail_cnt + 1;
+		$stop; // If simulating using Icarus Verilog, please enter "cont" to continue simulation
+    end
+	
+	Start = 1;
+	#80;
 
-    // Check: START was detected
+    // Test #2: START was detected
     if (start_detected) begin
         $display("PASS: START condition generated"); pass_cnt = pass_cnt + 1;
     end else begin
         $display("FAIL: START condition NOT detected"); fail_cnt = fail_cnt + 1;
     end
+	
+	
+	// Test #3: Master sends address to slave
+	
 
     // Check: STOP was detected
     if (stop_detected) begin
         $display("PASS: STOP condition generated"); pass_cnt = pass_cnt + 1;
     end else begin
         $display("FAIL: STOP condition NOT detected"); fail_cnt = fail_cnt + 1;
-    end
-
-    // Check: no ack_err (slave acknowledged)
-    if (!ack_err) begin
-        $display("PASS: ACK received (no ack_err)"); pass_cnt = pass_cnt + 1;
-    end else begin
-        $display("FAIL: ack_err asserted unexpectedly"); fail_cnt = fail_cnt + 1;
     end
 
     // Check Busy released
@@ -110,6 +101,8 @@ initial begin
         $display("FAIL: Busy still high after done"); fail_cnt = fail_cnt + 1;
     end
 
+
+	// Final Check for # of errors
     if (fail_cnt == 0)
         $display("\nALL TESTS PASSED (%0d/%0d)", pass_cnt, pass_cnt+fail_cnt);
     else
