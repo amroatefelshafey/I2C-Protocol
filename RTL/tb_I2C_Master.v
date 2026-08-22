@@ -42,11 +42,11 @@ reg scl_prev = 1;
 
 // Detect START and STOP conditions
 always @(SDA or SCL) begin
-    if (scl && ~SDA && sda_prev) begin
+    if (SCL && ~SDA && sda_prev) begin // SDA goes low (1->0) while SCL is high is START, detected by the if clause
         start_detected = 1;
         $display("[%0t ns] START condition detected", $time);
     end
-    if (scl && SDA && ~sda_prev) begin
+    if (SCL && SDA && ~sda_prev) begin // SDA goes high (0->1) while SCL is high is STOP, detected by the if clause
         stop_detected = 1;
         $display("[%0t ns] STOP condition detected", $time);
     end
@@ -59,16 +59,16 @@ initial begin
     $dumpfile("tb_I2C_Master.vcd");
     $dumpvars(0, tb_I2C_Master);
 
-    repeat(4) @(posedge clk);
-    rst = 0;
-    repeat(2) @(posedge clk);
+    repeat(4) @(posedge CLK);
+    RST = 0;
+    repeat(2) @(posedge CLK);
 
-    // Send a write transaction: addr=0x48, data=0xAB
+    // Send a write transaction: slave address=0x48, write data=0xAB
     // Slave will ACK (sda_in=0 simulated below)
-    @(posedge clk);
-    start_tx = 1;
-    @(posedge clk);
-    start_tx = 0;
+    @(posedge CLK);
+    Start = 1;
+    @(posedge CLK);
+    Start = 0;
 
     // Simulate slave pulling SDA low for both ACK windows
     // (Hold sda_in=0 throughout for simplicity — a real slave would
@@ -77,7 +77,7 @@ initial begin
 
     // Wait for done
     @(posedge done);
-    @(posedge clk);
+    @(posedge CLK);
 
     // Release sda_in
     sda_in = 1;
@@ -103,11 +103,11 @@ initial begin
         $display("FAIL: ack_err asserted unexpectedly"); fail_cnt = fail_cnt + 1;
     end
 
-    // Check busy released
-    if (!busy) begin
-        $display("PASS: busy deasserted after done"); pass_cnt = pass_cnt + 1;
+    // Check Busy released
+    if (!Busy) begin
+        $display("PASS: Busy deasserted after done"); pass_cnt = pass_cnt + 1;
     end else begin
-        $display("FAIL: busy still high after done"); fail_cnt = fail_cnt + 1;
+        $display("FAIL: Busy still high after done"); fail_cnt = fail_cnt + 1;
     end
 
     if (fail_cnt == 0)
