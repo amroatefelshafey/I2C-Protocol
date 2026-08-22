@@ -14,7 +14,7 @@ reg 	  R_W = 0; // 0 is for Write
 // So {Slave_Addr, R_W} = {100 1000, 0} = 8'b1001 0000 = 8'h90
 reg [7:0] Write_Data = 8'hAB;
 reg       Start = 0;
-reg       sda_in = 1;   // simulate slave pulling ACK
+reg       sda_in;
 
 wire 	   SDA;
 wire       SCL;
@@ -36,6 +36,7 @@ integer pass_cnt = 0, fail_cnt = 0;
 integer i;
 
 reg [7:0] tb_addr_rw;
+reg [7:0] tb_Write_Data;
 reg start_detected = 0;
 reg stop_detected  = 0;
 reg sda_prev = 1;
@@ -65,9 +66,6 @@ initial begin
 	RST = 0;
 	#10;
 	
-
-    // Release sda_in
-    sda_in = 1;
 	
 	// Test #1: IDLE State
 	if (dut.State == dut.IDLE) begin
@@ -100,7 +98,7 @@ initial begin
 	
 	for(i=7; i>=0; i=i-1) begin
 		#160;
-		tb_addr_rw[i] = dut.SDA;
+		tb_addr_rw[i] = SDA;
 	end
 	
 	if(tb_addr_rw == dut.addr_rw) begin 
@@ -115,9 +113,41 @@ initial begin
 	end
 	
 	// Test #4: Master reads ACK from the Slave.
+	sda_in = 0; // Simulate a slave pulling the line low, indicating ACK
+	if(dut.State == dut.READ_ACK) begin 
+		$display("Time %0t: Sitting at READ_ACK State", $time); pass_cnt = pass_cnt + 1;
+	end else begin
+		$display("ERROR: FSM not on READ_ACK State"); fail_cnt = fail_cnt + 1;
+		$stop; // If simulating using Icarus Verilog, please enter "cont" to continue simulation
+    end
+	
+	#40; $display("Value of SDA_OE: %b", SDA_OE);
+	#120;
 	
 	// Test #5: Master Writes data to Slave
+	if(dut.State == dut.WR_DATA) begin 
+		$display("Time %0t: Sitting at WR_DATA State", $time); pass_cnt = pass_cnt + 1;
+	end else begin
+		$display("ERROR: FSM not on WR_DATA State"); fail_cnt = fail_cnt + 1;
+		$stop; // If simulating using Icarus Verilog, please enter "cont" to continue simulation
+    end
+	#40; $display("Value of SDA_OE: %b", SDA_OE);
+	tb_Write_Data[7] = SDA;
 	
+	for(i=6; i>=0; i=i-1) begin
+		#160;
+		tb_Write_Data[i] = SDA;
+	end
+	
+	if(tb_Write_Data == Write_Data) begin 
+		$display("PASS: Successfully written the data 0x%h", tb_Write_Data); 
+		pass_cnt = pass_cnt + 1;
+	end
+	else begin
+		$display("FAIL: Failed to write correct data. Incorrect data written: 0x%h. , should be 0x%h", 
+		tb_Write_Data, Write_Data); 
+		fail_cnt = fail_cnt + 1;
+	end
 		
 
     // Check: STOP was detected 
