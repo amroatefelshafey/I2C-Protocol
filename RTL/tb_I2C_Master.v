@@ -4,25 +4,34 @@
 module tb_I2C_Master;
 
 parameter CLK_DIV = 4;   // fast for simulation
+parameter ADDR_WIDTH = 7;
+parameter BYTES_TO_READ = 3;
 
-reg       clk = 0;
-reg       rst = 1;
-reg       start_tx = 0;
-reg [6:0] addr      = 7'h48;
-reg [7:0] data_byte = 8'hAB;
-wire      scl;
-wire      sda_out;
+reg       CLK = 0;
+reg       RST = 1;
+reg [ADDR_WIDTH-1:0] Slave_Addr = 7'h48;
+reg 	  R_W = 0; // 0 is for Write
+reg [7:0] Write_Data = 8'hAB;
+reg       Start = 0;
 reg       sda_in = 1;   // simulate slave pulling ACK
-wire      busy, done, ack_err;
 
-i2c_master #(.CLK_DIV(CLK_DIV)) dut (
-    .clk(clk),.rst(rst),.start_tx(start_tx),
-    .addr(addr),.data_byte(data_byte),
-    .scl(scl),.sda_out(sda_out),.sda_in(sda_in),
-    .busy(busy),.done(done),.ack_err(ack_err)
+wire 	   SDA;
+wire       SCL;
+wire 	   SDA_OE;
+wire	   Busy;
+wire [7:0] Read_Data;
+
+wire       done, ack_err;
+
+i2c_master #(.CLK_DIV(CLK_DIV), .ADDR_WIDTH(ADDR_WIDTH), .BYTES_TO_READ(BYTES_TO_READ)) dut 
+(
+    .CLK(CLK), .RST(RST), .Start(Start),
+    .Slave_Addr(Slave_Addr), .Write_Data(Write_Data), .R_W(R_W),
+    .sda_in(sda_in), .SCL(SCL), .SDA(SDA), .SDA_OE(SDA_OE),
+    .Busy(Busy), .Read_Data(Read_Data)
 );
 
-always #5 clk = ~clk;
+always #5 CLK = ~CLK;
 
 integer pass_cnt = 0, fail_cnt = 0;
 integer scl_rise = 0;
@@ -32,16 +41,16 @@ reg sda_prev = 1;
 reg scl_prev = 1;
 
 // Detect START and STOP conditions
-always @(sda_out or scl) begin
-    if (scl && ~sda_out && sda_prev) begin
+always @(SDA or SCL) begin
+    if (scl && ~SDA && sda_prev) begin
         start_detected = 1;
         $display("[%0t ns] START condition detected", $time);
     end
-    if (scl && sda_out && ~sda_prev) begin
+    if (scl && SDA && ~sda_prev) begin
         stop_detected = 1;
         $display("[%0t ns] STOP condition detected", $time);
     end
-    sda_prev = sda_out;
+    sda_prev = SDA;
 end
 
 // Simulate slave ACK: pull SDA low during ACK clocks
