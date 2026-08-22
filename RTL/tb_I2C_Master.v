@@ -11,6 +11,7 @@ reg       CLK = 0;
 reg       RST = 0;
 reg [ADDR_WIDTH-1:0] Slave_Addr = 7'h48;
 reg 	  R_W = 0; // 0 is for Write
+// So {Slave_Addr, R_W} = {100 1000, 0} = 8'b1001 0000 = 8'h90
 reg [7:0] Write_Data = 8'hAB;
 reg       Start = 0;
 reg       sda_in = 1;   // simulate slave pulling ACK
@@ -32,6 +33,9 @@ i2c_master #(.CLK_DIV(CLK_DIV), .ADDR_WIDTH(ADDR_WIDTH), .BYTES_TO_READ(BYTES_TO
 always #5 CLK = ~CLK;
 
 integer pass_cnt = 0, fail_cnt = 0;
+integer i;
+
+reg [7:0] tb_addr_rw;
 reg start_detected = 0;
 reg stop_detected  = 0;
 reg sda_prev = 1;
@@ -67,14 +71,14 @@ initial begin
 	
 	// Test #1: IDLE State
 	if (dut.State == dut.IDLE) begin
-		$display("Sitting at IDLE State"); pass_cnt = pass_cnt + 1;
+		$display("Time %0t: Sitting at IDLE State", $time); pass_cnt = pass_cnt + 1;
     end else begin
         $display("ERROR: IDLE State is not the initial state"); fail_cnt = fail_cnt + 1;
 		$stop; // If simulating using Icarus Verilog, please enter "cont" to continue simulation
     end
 	
 	Start = 1;
-	#80;
+	#80; // Proceed the FSM to START, dut.sda_out=0
 
     // Test #2: START was detected
     if (start_detected) begin
@@ -83,11 +87,40 @@ initial begin
         $display("FAIL: START condition NOT detected"); fail_cnt = fail_cnt + 1;
     end
 	
+	#80; // Proceed the FSM to ADDR
+	
 	
 	// Test #3: Master sends address to slave
+	if(dut.State == dut.ADDR) begin 
+		$display("Time %0t: Sitting at ADDR State", $time); pass_cnt = pass_cnt + 1;
+	end else begin
+		$display("ERROR: FSM not on ADDR State"); fail_cnt = fail_cnt + 1;
+		$stop; // If simulating using Icarus Verilog, please enter "cont" to continue simulation
+    end
 	
+	for(i=7; i>=0; i=i-1) begin
+		#160;
+		tb_addr_rw[i] = dut.SDA;
+	end
+	
+	if(tb_addr_rw == dut.addr_rw) begin 
+		$display("PASS: Successfully addressed slave with address 0x%h and R/W bit of %b", 
+		tb_addr_rw >> 1, tb_addr_rw[0]); 
+		pass_cnt = pass_cnt + 1;
+	end
+	else begin
+		$display("FAIL: Failed to address slave. Incorrect address read: 0x%h. , should be 0x%h", 
+		tb_addr_rw >> 1, Slave_Addr); 
+		fail_cnt = fail_cnt + 1;
+	end
+	
+	// Test #4: Master reads ACK from the Slave.
+	
+	// Test #5: Master Writes data to Slave
+	
+		
 
-    // Check: STOP was detected
+    // Check: STOP was detected 
     if (stop_detected) begin
         $display("PASS: STOP condition generated"); pass_cnt = pass_cnt + 1;
     end else begin
