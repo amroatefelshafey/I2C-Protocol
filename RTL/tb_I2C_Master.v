@@ -30,6 +30,35 @@ i2c_master #(.CLK_DIV(CLK_DIV), .ADDR_WIDTH(ADDR_WIDTH), .BYTES_TO_READ(BYTES_TO
     .Busy(Busy), .Read_Data(Read_Data)
 );
 
+function [8*9:1] get_state_name;
+    input [2:0] state_val;
+    begin
+        case (state_val)
+            3'b000:  get_state_name = "IDLE     ";
+            3'b001:  get_state_name = "START    ";
+            3'b010:  get_state_name = "ADDR     ";
+            3'b011:  get_state_name = "READ_ACK ";
+            3'b100:  get_state_name = "SEND_ACK ";
+            3'b101:  get_state_name = "READ_DATA";
+            3'b110:  get_state_name = "WR_DATA  ";
+            3'b111:  get_state_name = "STOP     ";
+            default: get_state_name = "UNKNOWN  ";
+        endcase
+    end
+endfunction
+
+task state_assertion;
+	input [2:0] State;
+	begin
+		if(dut.State == State) begin 
+			$display("Time %0t: Sitting at %s State", $time, get_state_name(State)); pass_cnt = pass_cnt + 1;
+		end else begin
+			$display("ERROR: FSM not on %s State", get_state_name(State)); fail_cnt = fail_cnt + 1;
+			$stop; // If simulating using Icarus Verilog, please enter "cont" to continue simulation
+		end
+	end
+endtask
+
 always #5 CLK = ~CLK;
 
 integer pass_cnt = 0, fail_cnt = 0;
@@ -148,7 +177,12 @@ initial begin
 		tb_Write_Data, Write_Data); 
 		fail_cnt = fail_cnt + 1;
 	end
-		
+	
+	
+	
+	
+	
+	
 
     // Check: STOP was detected 
     if (stop_detected) begin
