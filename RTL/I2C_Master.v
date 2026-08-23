@@ -191,7 +191,6 @@ module i2c_master #(parameter ADDR_WIDTH = 7,
 								SCL <= 1'b0;
 								if(data_i == 0) begin
 									State <= READ_ACK;
-									bytes_remaining <= bytes_remaining - 1;
 								end
 								data_i <= data_i - 1;
 							end
