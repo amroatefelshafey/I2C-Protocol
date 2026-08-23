@@ -66,6 +66,8 @@ integer i;
 
 reg [7:0] tb_addr_rw;
 reg [7:0] tb_Write_Data;
+reg [7:0] tb_Read_Data;
+reg stop = 0;
 reg start_detected = 0;
 reg stop_detected  = 0;
 reg sda_prev = 1;
@@ -177,13 +179,41 @@ initial begin
 		tb_Write_Data, Write_Data); 
 		fail_cnt = fail_cnt + 1;
 	end
+	#120;
 	
+	// Test #6: Master Reads data from Slave
+	state_assertion(dut.READ_ACK);
+	dut.rw_bit = 1'b1; // Change to reading from slave
+	#160;
+	state_assertion(dut.READ_DATA);
+	#40; $display("Value of SDA_OE: %b", SDA_OE);
 	
+	while(!stop) begin
+		for(i=7; i>=0; i=i-1) begin
+			sda_in = ~sda_in; // Simulate toggling sda_in. Since it was 0 prior, sda_in=1 here. So the first byte to 
+			// be read is 8'b1010 1010 = 8'hAA, the rest of the bytes will all be identical as well.
+			#160;
+			tb_Read_Data[i] = sda_in;
+		end
+		
+		#160; if(dut.State == dut.STOP) stop = 1; // This passes the master through SEND_ACK
+		if(tb_Read_Data == Read_Data) begin
+			$display("PASS: Successfully read the data 0x%h", tb_Read_Data); 
+			pass_cnt = pass_cnt + 1;
+		end
+		else begin
+			$display("FAIL: Failed to read correct data. Incorrect data read: 0x%h. , should be 0x%h", 
+			tb_Read_Data, Read_Data); 
+			fail_cnt = fail_cnt + 1;
+		end
+		$display("Number of bytes remaining to be read: %d", dut.bytes_remaining);
+	end
 	
+	// Test #7: Master goes to STOP State and releases Busy
+	#40;
+	state_assertion(dut.STOP);
+	#120; // Go through the remaining quarters of the stop state
 	
-	
-	
-
     // Check: STOP was detected 
     if (stop_detected) begin
         $display("PASS: STOP condition generated"); pass_cnt = pass_cnt + 1;
@@ -207,7 +237,5 @@ initial begin
 
     $finish;
 end
-
-initial #500000 begin $display("TIMEOUT"); $finish; end
 
 endmodule
